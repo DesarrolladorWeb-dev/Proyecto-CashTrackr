@@ -1,0 +1,174 @@
+composer run serve
+
+ejecutar el projecto 
+composer run dev
+
+php artisan migrate
+
+
+php 8.5.9
+apache 24
+
+
+
+limpia la caché de configuración de Laravel e intenta migrar de nuevo:
+php artisan config:clear
+
+
+
+
+DB_CONNECTION=pgsql
+DB_HOST=ep-gentle-breeze-aye4xt5l-pooler.c-5.us-east-2.aws.neon.tech
+DB_PORT=5432
+DB_DATABASE=neondb
+DB_USERNAME=neondb_owner
+DB_PASSWORD=npg_LnwDz1Ioasc9
+
+
+DB_CONNECTION=pgsql
+DATABASE_URL="postgresql://neondb_owner:npg_LnwDz1Ioasc9@ep-gentle-breeze-aye4xt5l-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&options=endpoint%3Dep-gentle-breeze-aye4xt5l"
+/*
+In Neon, databases are stored on branches. By default, a project has one branch and one database.
+You can select the branch and database to use from the drop-down menus above.
+
+Try generating sample data and querying it by running the example statements below, or click
+New Query to clear the editor.
+*/
+CREATE TABLE IF NOT EXISTS playing_with_neon(id SERIAL PRIMARY KEY, name TEXT NOT NULL, value REAL);
+INSERT INTO playing_with_neon(name, value)
+  SELECT LEFT(md5(i::TEXT), 10), random() FROM generate_series(1, 10) s(i);
+SELECT * FROM playing_with_neon;
+
+
+
+postgresql://neondb_owner:npg_LnwDz1Ioasc9@ep-gentle-breeze-aye4xt5l-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+
+
+--------------------------------------
+
+El problema es que estás ejecutando las migraciones a través del Pooler de Neon (-pooler en el host). PgBouncer en modo transaction no soporta Prepared Statements ni ciertas transacciones DDL de PostgreSQL, lo que causa que falle la transacción al crear los índices de la tabla users.
+
+Para solucionarlo, debes usar la conexión directa de Neon (sin el -pooler) para ejecutar migraciones.
+
+1. Cambia el DB_HOST en tu .env
+
+Quita el sufijo -pooler de tu host:
+
+Antes:
+
+Fragmento de código
+DB_HOST=ep-gentle-breeze-aye4xt5l-pooler.c-5.us-east-2.aws.neon.tech
+Ahora (Conexión Directa):
+
+Fragmento de código
+DB_HOST=ep-gentle-breeze-aye4xt5l.c-5.us-east-2.aws.neon.tech
+2. Limpia la caché y resetea la base de datos
+
+Ejecuta los siguientes comandos en tu terminal para refrescar la configuración y limpiar las tablas que quedaron a medias:
+
+Bash
+php artisan config:clear
+php artisan db:wipe
+php artisan migrate
+Consejo: Una vez que las migraciones terminen con éxito, puedes volver a colocar el host con -pooler en tu .env si deseas aprovechar el pooling de conexiones para las peticiones normales de la aplicación web.
+
+
+
+
+
+--------------------------------------------
+funciono , pero a que te refieres con esto ? 
+El problema es que estás ejecutando las migraciones a través del Pooler de Neon (-pooler en el host). PgBouncer en modo transaction no soporta Prepared Statements ni ciertas transacciones DDL de PostgreSQL, lo que causa que falle la transacción al crear los índices de la tabla users.
+
+
+no lo puedo hacer normalmente con -pooler?
+
+
+¡Excelente que ya funcionó!
+
+No, **no es recomendable ni del todo posible ejecutar migraciones mediante el host `-pooler**`, y aquí te explico exactamente por qué ocurre esto sin dar tantas vueltas:
+
+**¿Qué hace el Pooler (PgBouncer)?**
+
+El `-pooler` utiliza **PgBouncer en modo de transacción** (*Transaction Pooling*). Esto significa que la conexión entre Laravel y PostgreSQL no es persistente; se asigna y se destruye dinámicamente con cada consulta SQL que envías para optimizar el uso de recursos.
+
+**¿Por qué fallan las migraciones con `-pooler`?**
+
+* **Modificación de estructura (DDL):** Crear tablas, agregar restricciones (`UNIQUE`, `FOREIGN KEY`) o modificar columnas (comandos DDL) requiere una conexión persistente y exclusiva durante toda la transacción. PgBouncer interrumpe esa continuidad.
+* **Prepared Statements:** Laravel por defecto reutiliza sentencias preparadas en PDO. En el modo de transacción de PgBouncer, los *prepared statements* asignados en una consulta pueden irse a otro proceso de base de datos distinto en la siguiente sentencia, provocando que la transacción falle de inmediato.
+
+---
+
+**Diferencia de usos en Neon**
+
+| Tipo de Conexión | Host | ¿Para qué sirve? |
+| --- | --- | --- |
+| **Directa** (Sin `-pooler`) | `ep-gentle-...c-5.aws.neon.tech` | **Migraciones**, scripts de mantenimiento, *seeders* masivos o tareas DDL. |
+| **Pooler** (Con `-pooler`) | `ep-gentle-...-pooler.c-5.aws.neon.tech` | **Tráfico web normal** de usuarios (Consultas `SELECT`, `INSERT`, `UPDATE` de la app). |
+
+---
+
+**¿Cómo configurarlo en Laravel para no cambiar manualmente el `.env`?**
+
+Puedes definir dos conexiones en tu `config/database.php`: una directa para las migraciones y otra con pooler para el resto del sistema.
+
+Agrega en `config/database.php`:
+
+```php
+'pgsql' => [
+    'driver' => 'pgsql',
+    'host' => env('DB_HOST'), // Host del Pooler (...-pooler...)
+    'port' => env('DB_PORT', '5432'),
+    'database' => env('DB_DATABASE'),
+    'username' => env('DB_USERNAME'),
+    'password' => env('DB_PASSWORD'),
+    'sslmode' => 'require',
+],
+
+'pgsql_direct' => [
+    'driver' => 'pgsql',
+    'host' => env('DB_HOST_DIRECT'), // Host Directo (sin -pooler)
+    'port' => env('DB_PORT', '5432'),
+    'database' => env('DB_DATABASE'),
+    'username' => env('DB_USERNAME'),
+    'password' => env('DB_PASSWORD'),
+    'sslmode' => 'require',
+],
+
+```
+
+Y cuando quieras migrar especificando la conexión directa, ejecutas:
+
+```bash
+php artisan migrate --database=pgsql_direct
+
+```
+
+-----------------------------------------------------------------
+
+cuando solucionaste php lo actualizaste a la ultima verssion pasa que muestra mucha informacion cuando ejecutas composer run dev lo solucionas actualizando composer
+
+
+Esos mensajes son advertencias de obsolescencia (Deprecation Notices) porque la versión de PHP que estás ejecutando en Laragon (PHP 8.4+) es más reciente que la versión del ejecutable global de Composer (composer.phar).
+
+No son errores fatales y no rompen tu aplicación, pero puedes limpiarlos rápidamente actualizando Composer.
+
+1. Actualiza el binario global de Composer
+
+Abre Cmder o la terminal de Laragon y ejecuta:
+
+Bash
+composer self-update
+2. Si el aviso persiste (Laragon)
+
+Si al ejecutar el comando anterior Laragon te indica que ya tienes la versión más reciente o no la reemplaza en su ruta interna, puedes actualizar el archivo .phar directamente:
+
+Bash
+composer self-update --stable
+3. Para levantar tu servidor de desarrollo sin scripts de Composer
+
+Si solo quieres iniciar el servidor frontend (Vite/Tailwind) sin pasar por el CLI de Composer, puedes usar npm/pnpm directo:
+
+Bash
+npm run dev
+Una vez actualizado Composer con composer self-update, todos esos avisos amarillos desaparecerán al ejecutar comandos.

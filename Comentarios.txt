@@ -1,0 +1,207 @@
+el layout sirve para reutilizarlo , una plantilla 
+
+--------------------------------
+artisa cli:
+migrate:fresh -> limpia todas las tablas o eliminar todas las tablas y volver a ejecutar las migraciones
+
+migrate:status-> nos dira el estatus de todas las
+migraciones si se realizo correctamente
+
+migrate:rollback -> aveces agregas codigo de 
+base de datos y despues ves algunos errores con 
+rollback para deshacer esa migracion
+
+route:list
+
+puedes limpiar el cache de las vistas 
+por ejemplo cuando agregas nuevas vistas de 
+blade, nuevo codigo de js ycodigo de css 
+y no se esta reflejando , puedes limpiar 
+usando : view:clear
+----------------------------------------
+creando controller : nota:una clase siempre comienza
+en mayuscula(PascalCase o OpenCamelcase)
+php artisan make:controller RegisterController
+
+nota : crear una carpeta de los controladores relacionados a la autenticacion 
+php artisan make:controller Auth/RegisterController
+---------------------------------------
+es buena practica en el form usar el method y action:
+action={{route('register.store')}} y se usa el nombre de la ruta web.php
+------------------------------
+TITULO: REGISTRO DE USUARIOS
+
+public function store(Request $request){ 
+//esto solo te dara la informacion
+        //$name = $request->input('name');
+        //$email = $request->input('email');
+//usaremos validate de request : obtiene los valores 
+// pero si no cumple no se ejecutara al dar click en el formulario enviara los errores a la vista 
+        $data = $request->validate([
+            'name' => ['required', 'string'],
+            'email' => ['required'.'email']
+        ]);
+
+dd($data)--> detiene la ejecucion del codigo y manda en pantalla un arreglo objeto o variable 
+    }
+-------------------------------------
+//si envio el formulario vacio no pasara nada pero 
+lo que realiza el request->validate es que si falla la validacion se lo envia a la misma vista en este caso 
+register.blade.php -> y muestras los errores asi :
+    @error('name')  //en el register.blade.php 
+        <p>{{$message}}</p> //recuperas el mensaje de error (estara en ingles)        
+    @enderror
+----------------------------------------------
+//pasar a español los mensajes de error:
+ $data = $request->validate([
+            'name' => ['required', 'string'],
+            'email' => ['required'.'email']
+        ],[
+//cuando ocurre ese error mostrara
+	'name.required' => 'El nombre es obligatorio'
+]);
+
+//todo si existe error en el validate el codigo de abajo no se ejecuta 
+-----------------------------------------------------
+Creamos nuestro Request personalizados(tipos de request) para no llenar de validaciones nuestro controlador - moveremos el validate a un request que crearemos:
+php artisan make:request SignupRequest->separaremos la validacion en una clase propia ay podremos definir las reglas de validacion y los mensajes y nuestro controlador quedara mas ligero
+------------------------------------------------------
+SignupRequest.php
+//el usuario esta autorizado a ejecutar este request
+//por default esta false, para que lo pueda utilizar lo cambiamos a true
+  public function authorize(): bool
+    {
+        return false;
+    }
+//aqui tendremos las reglas de validacion ejemplo:
+
+ public function rules(): array
+    {
+        return [
+            	'name' => ['required', 'string'],
+		'email' => ['required','email']
+        ];
+    }
+-----------------------------------------------
+RegisterController.php quedaria asi :
+    public function store(SignupRequest $request){ 
+        $data = $request->validated();
+    	dd($data);
+    }
+-----------------------------------------
+SignupRequest.php - para los mensajes crearemos el metodo 
+    public function messages():array{
+        //cuando ocurre ese error mostrara
+        return [
+            'name.required' => 'El Nombre es obligatorio',
+            'email.required' => 'El Email es obligatorio',
+            'email.email' => 'E-mail no valido'
+        ];
+    }
+------------------------------------------------
+el la funcion de las reglas del Request creado :
+confirmed -> significa = debe ser igual al campo "repetir password"
+nota :importante que el  campo de "repetir password" tenga: name="password_confirmation" 
+-----------------------------------------------
+puedes usar Password:: de use Illuminate\Validation\Rules\Password; y su metodo estatico min(8)
+la ventaja es que tiene mas metodos  usando ->  los mensajes funcionaran normal
+ 'password' => ['required', 'confirmed',Password::min(4)->letters() // letters = el password debe requerir almenos una letra
+->mixedCase() //almenos una mayuscula y una minuscula
+->symbols() //almenos un simbolo, caracter especial
+->numbers() //que almenos tenga un numero
+->uncompromised() //revisa la contraseña ingresada que no se encuentre en un diccionario de contraseñas]
+---------------------------------------------------
+Eloquent ORM
+Laravel incluye su propio ORM (Object Relacional Mapper) que hace muy sencillo interactuar con tu base de datos.
+En Eloquent cada tabla, tiene su propio modelo; ese modelo
+interactüa ünicamente con esa tabla y tiene las funciones necesarias para crear registros, obtenerlos, actualizarlos y eliminarlos.
+----------------------------------------------
+dd($data); --> al usarlo se detendra todo el codigo 
+-----------------------------------------------
+Register Controller.php
+ User::create($data); -> ¿Como sabemos que lo va a insertar y porque y donde ? cuando realizamos las migraciones del Modelo(Usuario ó User) se creo la tabla de users en la carpeta migration : 
+
+ Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->timestamp('email_verified_at')->nullable();
+            $table->string('password');
+            $table->rememberToken();
+            $table->timestamps();
+        });
+y otras tablas mas
+
+Como sabe el modelo User.php como se llaman esas tablas(¿campos seran?)
+porque vemos : este Filabol
+#[Fillable(['name', 'email', 'password'])]
+
+porque cuando enviamos los datos desde aqui:
+User::create($data); -> se envian esos valores desde el formulario
+De esa forma se mapean los datos y se ingresan hacia la base de datos.
+El la Base de datos de neon veras que el password esta encriptado.
+-----------------------------------------------------
+evitando email duplicado:
+veras esto en la migracion users  $table->string('email')->unique();
+explicacion : con las migraciones es una forma que con codigo puedes crear la estructura de tu base de datos 
+en SignupRequest.php:
+podremos dar una respuesta a ese unique() agregamos:
+'email' => ['required','email','unique:table,column,except,id'],
+table = es en que tabla lo quieres
+column = en que columna lo quieres y borramos los dos otros
+['required','email','unique:users,email'] // y agregamos los mensajes y cuando colocamos el mismo correo saldra el mensaje
+-------------------------------------------------------
+Mantener los valores de los Input si falla la validacion:
+  <input 
+            id="name" 
+            type="text" 
+            placeholder="Tu Nombre"
+            name="name" 
+            value="{{ old('name') }}" // se le agregan esto
+        />
+vemos que en los password no aparece,esto es por los Hidden
+del archivo User.php
+#[Hidden(['password', 'remember_token'])]
+eso significa que en cualquier lugar donde se va a ser un log del password lo va a ocultar y en este caso tambien lo va a ocultar del formulario - te protege en ese caso
+entonces se lo borramos los old('password')
+--------------------------------------------------------
+nota: el modelo esta en singular (User.php)y la base de datos le coloca una s al final -(¿talves exista una forma para que no lo haga?) talvez desde la migracion 
+-------------------------------
+Verificacion de Cuentas:Mailtrap
+correo que use para registrarme : condor88@gmail
+MAIL_MAILER=smtp
+MAIL_HOST=sandbox.smtp.mailtrap.io
+MAIL_PORT=2525
+MAIL_USERNAME=5f0cfc7416313c
+MAIL_PASSWORD=cac188d65d26ad
+
+#quien va a ser quien enviara este email
+MAIL_FROM_ADDRESS="hello@example.com"
+
+Nos vamos a User.php
+//vamos a decirle a laravel que  queremos implementar que el usuario tiene que verificar su cuenta , agregamos :
+class User extends Authenticatable implements MustVerifyEmail
+----------------------------------
+Creando metodo para enviar el email de verificacion:
+al agregar esto "implements MustVerifyEmail" nos da acceso a lo que se llama eventos(que es "algo que sucede")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
