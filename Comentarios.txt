@@ -184,23 +184,194 @@ class User extends Authenticatable implements MustVerifyEmail
 ----------------------------------
 Creando metodo para enviar el email de verificacion:
 al agregar esto "implements MustVerifyEmail" nos da acceso a lo que se llama eventos(que es "algo que sucede")
+ejemplo: ecomerce -> la packeteria nos dice que "ya entregaron el paquete" nos llega ese evento y entonces le enviamos al usuario un email que diga que ya recibio su paquete.
+
+en caso de nuestro formulario , cuando le da click en "registrarme"
+
+y de hecho laravel tiene muchos eventos:
+php artisan event:list
+
+y ves ahi el evento de Registered -> cuando ocurre algo:
+ Illuminate\Auth\Events\Registered
+
+y tambien tenemos un Listeners -> que esta esperando que ocurra el evento para entonces mandarse a llamar :
+Illuminate\Auth\Listeners\SendEmailVerificationNotification
 
 
+SendEmailVerificationNotification.php
+explic: cuando el usuario tiene MustVerifyEmail entonces tenemos un evento en user llamado sendEmailVerificationNotification() :
+
+public function handle(Registered $event){
+if($event->user instanceof MustVerifyEmail && ! $event->user->hasVerifiedemail()) {
+$event->user->sendEmailVerificationNotification() ;
+)
+
+en este caso en tu modelo puedes reescribirlo y dale el comportamiento que tu quieres en este caso me da el email
+entonces copiamos el metodo nos vamos a User.php:
+creamos el metodo :
+  public function sendEmailVerificationNotification()
+    {
+        dd('Desde sendEmailVerificationNotification');
+    }
 
 
+hasta aqui tenemos el evento de Registered que manda a llamar el metodo sendEmailVerificationNotification()
+¿entonces como mando a llamar este evento de Registered?
+nos vamos a RegistererController.php
+y una ves que mandamos a crear el usuario nos vamos a llamar ese evento :
+
+public function store(SignupRequest $request){ 
+    $data = $request->validated();
+    $user User::create($data);
+    event(new Registered($user)); ->se le pasa la instancia de usuario al evento
+
+luego ira al modelo y ejecutara el metodo sendEmailVerificationNotification()
+------------------------------------------------
+Enviando el email con el token de verificacion
+php artisan make --> para que me aparescan solo los make
+
+php artisan make:notification
+nos dira que nombre queremos ?
+VerifyEmail
+nos dira si queremos crear una vista ?
+No
+nos creara en app/Notidications/VerifyEmail.php
+quitamos el contructor no lo usaremos
+y nos aparece en que via vas a enviar tu notificacion
+y viene aqui mail,tambien puedes colocar que se envie una notificacion a la base de datos :
+public function via(object $notifiable): array
+    {
+        return ['mail'];
+    }
 
 
+Pero en este caso queremos enviar un email, tenemos toMail y toArray : 
+  public function toMail(object $notifiable): MailMessage
+    {
+        return (new MailMessage)
+            ->line('The introduction to the notification.')
+            ->action('Notification Action', url('/'))
+            ->line('Thank you for using our application!');
+    }
+
+en este caso solo queremos enviar el email entonces eliminamos el metodo toArray()
+
+este Email se lo vamos a enviar al usuario un enlace que tiene que presionar entonces nosotros vamos a confirmar la cuenta del usuario.
+
+ public function toMail(object $notifiable): MailMessage
+    {
+//AGREGAMOS
+//esto crea un url temporal
+$verificationUrl = URL::temporarySignedRoute(
+  'verification.verify', // para que el boton de "Confirmar Cuenta" lo envie a "verification.verify"
+
+   // y va a vencer en cinco minutos (tiene 1h para verif su cuenta)
+  now()->addMinutes(60),
+  ['id' => $notifiable->getKey(), //le enviamos el token (estaran los datos para identificar 	al usuario)
+   'hash' => sha1($notifiable->getEmailForVerification()), //tambien el email para la 	verificacion]);
+    return (new MailMessage) //utilizara MailMessage para enviar el email - usara las variables de entorno
+            ->subject('Confirma tu cuenta en CashTrackr')
+            ->greeting('!Hola¡')
+            ->line('Gracias por registrarte en CashTrackr, tu cuenta ya esta lista solo debes confirmarla')
+            ->action('Confirmar Cuenta',$verificationUrl) //colocamos la url y Crearemos una ruta en el web.php
+            ->line('Si no creaste esta cuenta, puedes ignorar este mensaje');
+    }
+
+Creando la Ruta en el web.php :
+
+// ver el VerifyEmail.php vemos que le estamos pasando el id y el hash , el cliente da click en la url temporal y lo envia aqui 
+// /email/verify/id/hash           -> hash no es igual a encriptado (el hash en este caso es el email hasheado) y signature (es una firma para proteger la integridad)
+Route::get('/email/verify/{id}/{hash}',function(){
+})->name('verification.verify'); //cuando hace click en el boton de "Confirmar Cuenta" lo envia aqui
 
 
+Ahora en la verificacion tenemos que mandarlo a llamar ¿donde va a hacer? 
+en el User.php:
+notify es un metodo que existe en los usuario para enviarle una notificacion en este caso le podremos enviar esta notificacion esta clase (VerifyEmail.php -> metodo toMail())
+y normalmente las notificaciones existen en los usuario porque es lo que quieres notificar
 
+  public function sendEmailVerificationNotification()
+    {
+        //enviaremos el email
+        //este "this" hace referencia al usuario que esta creando la cuenta 
+        //porque desde el RegisterController.php le envias el usuario al Registered
+        //y entonces llamamos a llamar a nuestra clase VerifyEmail
+        $this->notify(new VerifyEmail); //ya VerifyEmail se encarga de enviar el email
+    }
+-----------------------------------------------------------------------------
+Creando la URI para Verificar la Cuenta del Usuario:
+web.php
+nota : laravel tiene una request para verificar un email se llama EmailVerificationRequest.
 
+Route::get('/email/verify/{id}/{hash}',function(EmailVerificationRequest $request){
+    $request->fulfill(); //tomara los valores de la url y va a intentar confirmar la cuenta 
 
+})->name('verification.verify'); //cuando hace click en el boton de Confirmar Cuenta lo envia aqui
 
+Si nos vamos a Neon podemos ver en usuarios el campo email_verigied_at(cuando fue verificada la cuenta) y vemos que esta NULL , y eso es porque no lo hemos verificado.
 
+antes de seguir , cuando queremos verificar el usuario	necesitamos tener una sesion de usuario	autenticado para compararlo y poderlo confirmar. y tambien requerimos revisar la integridad del hash (que no haya sido modifi)
 
+RegisterController.php:
+//una ves que creamos el usuario y una vez que le enviamos el email vamos a autenticarlo:
 
+use Illuminate\Support\Facades\Auth;
+public function store(SignupRequest $request){
+//....
+event(new Registered($user));
+Auth::login($user);-> para que inicie session con este usuario (LO ESTAMOS AUTENTICANDO AQUI)
+}
+Cuando inicia session en laravel crea un cookie por lo tanto ese cookie lo puede recuperar en web.php y entonces confirmar la cuenta del usuario y ver que usuario es, nos da seguridad. 
+web.php: 
+-agregamos el middleware(auth) -> significa: "Esta ruta requiere que el usuario este autenticado para entonces verificar el email del usuario" y de esta manera verifica la cookie session.
+-segundo middleware(signed)->verifica que la integridad del hash no halla sido modificada
 
+Route::get('/email/verify/{id}/{hash}',function(EmailVerificationRequest $request){
+    $request->fulfill();
 
+})->middleware(['auth','signed'])->name('verification.verify'); 
+
+Listo ahora enviamos el correo al dar click en registrar y al dar click al boton de "Confirmar Cuenta" el campo de la tabla user "email_verigied_at" se llenara el campo.
+--------------------------------------------------
+Creando una Vista que le diga al usuario que tiene que verificar su cuenta.
+
+-cuando creo la cuenta se queda en blanco
+-cuando confirmo cuenta se queda en //
+
+RegisterController.php 
+redirect() -> para redirigir a una url diferente y usando route le pasas el nombre de una ruta
+redirect()-route() --> es mejor usar esto
+
+---------------------------
+->middleware('auth') : "solo el usuario authenticado puede ingresar" para que en otro navegador no se pueda ingresar usando el url - y te lleva a iniciar session.
+Route::get('/email/verify', function(){
+    return view('auth.verify-email');
+})->middleware('auth')->name('verification.notice');
+--------------------------------------------------
+Permitiendo a usuarios verificados acceder al Dashboard:
+redirigir un usuario que confirmo su cuenta lo llevaremos hacia el dashboard.
+
+verify : que el usuario tenga que haber verificcado su cuenta - el campo del db "email_verified_at".
+
+Route::get('/dashboard', function(){
+    return view('dashboard');
+})->middleware(['auth','verified'])->name('dashboard');
+-------------------------------------------------------
+Mostrando el mensaje que la cuenta se verifico correctamente:web.php
+
+with : mostrando un mensaje temporal se le conoce como flash que se muestra una ves y cuando el usuario recarga ya desaparece 
+
+ return redirect()->route('dashboard')->with('success','Tu correo fue verificado Correctamente.
+    Ya puedes Crear Presupuestos y Gastos.');
+
+dashboard.php : lo usas aqui
+
+@section('auth-contents')
+    @if (session('success'))
+        <p>{{ session('success') }}</p>
+    @endif
+nota : si recargas desaparece solo se recarga una vez
+------------------------------------------------
 
 
 
