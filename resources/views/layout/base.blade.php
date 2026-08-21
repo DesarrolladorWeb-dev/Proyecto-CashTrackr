@@ -20,16 +20,24 @@
                             <img src="{{ asset('img/logo.svg') }}" alt="cashtrakr logo" class="w-full blocks">
                     </div>
                     {{-- si no existe la ruta en web.php no lo muestra --}}
-            @if (Route::has('login'))
                     <nav class="flex flex-col lg:flex-row items-center gap-4">
+
+                        @auth
+                            <p class="text-white text-xl">Hola {{ auth()->user()->name }}</p>
+                        @else
+                            
+
+            @if (Route::has('login'))
                         <a
                         class="text-white font-bold uppercase p-2"
                         href="{{ route('login') }}">Iniciar Sesion</a>
                         <a
                         class=" font-bold uppercase border-2 border-amber-500 px-5 py-2 text-amber-500"
                         href="{{ route('register') }}">Crear Cuenta</a>
+                    @endif
+                        @endauth
+
                     </nav>
-            @endif
                 </div>
 
             </header>

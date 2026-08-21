@@ -21,9 +21,7 @@
         />
     </div>
 
-    @error('name')
-        <p class="text-red-600">{{ $message }}</p>        
-    @enderror
+  <x-input-error field="name"/>
 
     <div class="space-y-2">
         <label class="font-bold text-2xl block" for="email">Email</label>
@@ -39,9 +37,7 @@
         />
     </div>
 
-    @error('email')
-        <p class="text-red-600">{{ $message }}</p>        
-    @enderror
+  <x-input-error field="email"/>
 
     <div class="space-y-2">
         <label class="font-bold text-2xl block">Password</label>
@@ -55,9 +51,7 @@
 
         />
     </div>
-        @error('password')
-        <p class="text-red-600">{{ $message }}</p>        
-    @enderror
+  <x-input-error field="password"/>
 
     <div class="space-y-2">
         <label class="font-bold text-2xl block" for="password_confirmation">Repetir Password</label>

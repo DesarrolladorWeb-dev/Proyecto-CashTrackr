@@ -351,7 +351,7 @@ Route::get('/email/verify', function(){
 Permitiendo a usuarios verificados acceder al Dashboard:
 redirigir un usuario que confirmo su cuenta lo llevaremos hacia el dashboard.
 
-verify : que el usuario tenga que haber verificcado su cuenta - el campo del db "email_verified_at".
+verified : que el usuario tenga que haber verificcado su cuenta - el campo del db "email_verified_at".
 
 Route::get('/dashboard', function(){
     return view('dashboard');
@@ -372,6 +372,274 @@ dashboard.php : lo usas aqui
     @endif
 nota : si recargas desaparece solo se recarga una vez
 ------------------------------------------------
+TITULO: AUTENTICACION/LOGIN DE USUARIOS
+
+D:\INSTALADOS\laragon\www\cashtrackr(main -> origin)
+λ php artisan make:request SignInRequest
+
+nota : SignInRequest.php
+class SignInRequest extends FormRequest
+{  
+public function authorize(): bool
+ {return true; //importante pasarlo a true cuando lo usas en el Controller }
+
+nota : si estara como true tambien lo puedes eliminar el metodo authorize() porque por defecto ya esta en true
+------------------------------
+Agregamos los mensajes de validacion 
+SignInRequest.php
+
+en el metodo rules() recuerda que puedes realizar validaciones , pero algo que tambien puedes hacer es añadir unas traducciones. usamos el archivo que tenemos.
+
+creamos la carpeta "lang" y colocamos la carpeta "es"
+.env 
+APP_LOCALE=es --> agregamos es
+APP_FALLBACK_LOCALE=es -->tambien 
+APP_FAKER_LOCALE=en_US
+
+colocamos en login.blade.php:
+   @error('email')
+        <p class="text-red-600">{{ $message }}</p>        
+    @enderror
+
+
+ahora solo tenemos esto en SignInRequest.php:
+namespace App\Http\Requests;
+
+use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Foundation\Http\FormRequest;
+
+class SignInRequest extends FormRequest
+
+{
+    public function rules(): array
+    {
+        return [
+            'email' => ['required', 'email'],
+            'password' => ['required']
+        ];
+    }
+}
+
+sin embargo tenemos los mensajes de los errores en español sin yo haberles colocado aqui, lo que hace es que tiene valores en preterminado por ejemplo tomar el name password del input y tambien el @error('password'), pero ahora si no quieres que sea password y quieres que diga contraseña realizamos esto:
+
+SignInRequest.php:
+crear un metodo llamado atributes() , y mapeamos la palabra de password por contraseña.
+public function attributes() : array {
+        return [
+            'password' => 'contraseña'
+        ];
+    }
+Ahora el mensaje dira "El campo contraseña es obligatoria"
+---------------------------------------------------------
+Revisar si una cuenta Existe:
+
+//primero comprobar si el usuario existe -> siempre estas cosas se realiza en el SigninRequest.
+//comprobar si ese email y password son incorrectos
+
+lo relizare en SigninRequest.php
+colocaremos en rules() , "exists":
+
+'email' => ['required', 'email', 'exists:table,column'],
+queda asi:
+'email' => ['required', 'email', 'exists:users,email'],
+
+
+como vemos que el mensaje de error que nos aparece no se entiende bien podremos rescribir los mensajes: en SigninRequest.php creamos el metodo messages():
+
+public function messages(): array{ 
+return ['email.exists' => 'No encontramos una cuenta con ese correo electronico' ]; }
+
+recordar que cuando colocamos un value ={{old('email') }}
+en un input debemos quitar  el "/" al final del input  />
+--------------------------------------------------------
+Revisar el Password del Usuario:
+use Illuminate\Support\Facades\Auth;
+LoginController.php
+attempt : intentar iniciar session(vemos como toma las credenciales que le pasamos $data que esta el email y password).
+back(): retornamos a la vista anterior
+->with(): regresa con "el mensaje flash"
+codigo:
+public function store(SignInRequest $request){
+$data = $request->validated();
+if(!Auth::attempt($data)){
+//en caso de que sean incorrectos 
+return back()->with('error','Creadenciales incorrectas');
+}}
+entonces si coloco un mal password lo redirigira a la misma pagina osea al login.blade.php
+y colocamos esto en login.blade : 
+@if (session('error'))
+    <p>  {{ session('error') }}</p>
+@endif
+------------------------------------------------
+Crear un Componente re-utilizable para los errores de validacion:
+vemos que los mensajes flash los @if (session('value'))
+se repiten muchos seria bueno crear un componente reutilizable.
+
+D:\INSTALADOS\laragon\www\cashtrackr(main -> origin)
+λ php artisan make:component inputError
+INFO  Component [D:\INSTALADOS\laragon\www\cashtrackr\app\View\Components\inputError.php] created successfully.
+INFO  View [D:\INSTALADOS\laragon\www\cashtrackr\resources\views\components\input-error.blade.php] created successfully.
+
+eliminamos la que se encuentra aqui:
+\app\View\Components\inputError.php
+
+login.blade.php
+ara renderizar el componente input-error.blade.php que ya le puse solo un <p>....<p>
+quitamos esto:
+   @error('email')
+        <p class="text-red-600">{{ $message }}</p>        
+    @enderror 
+y se renderiza como si fuera html inicia con x- y tenemos input-error (vemos el autocompletado) que es el nombre del componente:
+<x-input-error />
+la ventaja es que puede tener multiples <x-input-error /> y todos tendran la misma apariencia. ahora pasaremos valores.
+<x-input-error field="email"/>
+lo recuperamos en input-error.blade.php existe algo llamado props 
+
+@props(['field']) //de esta manera tenemos una variable que podremos utilizar 
+<p >desde input-error.blade.php {{ $field }}</p>
+
+Le podremos enviar mas valores :
+<x-input-error field="email" value="cualquier_cosa"/>
+
+input-error.blade.php : se obtiene de esta manera
+@props(['field','value'])
+
+input-error.blade.php : asi esta el archivo movimos el @error
+
+@props(['field']) 
+
+    @error($field)
+        <p class="text-red-600">{{ $message }}</p>        
+    @enderror
+
+y remplazamos en el archivo de login.blade.php los @error por <x-input-error field="email"/>.
+--------------------------------------------------------
+Crear un Componente re-utilizable para las sesiones:
+haremos esto un componente para los session:
+    @if (session('success'))
+    
+    @endif
+
+terminal:
+D:\INSTALADOS\laragon\www\cashtrackr(main -> origin)
+λ php artisan make:component Alert
+INFO  Component [D:\INSTALADOS\laragon\www\cashtrackr\app\View\Components\Alert.php] created successfully.
+INFO  View [D:\INSTALADOS\laragon\www\cashtrackr\resources\views\components\alert.blade.php] created successfully.
+
+Aqui si usaremos los dos , tenemos este Alert.php:
+podemos ver que extiende de un Component y tiene un constructor
+
+entonces puedes pasarle al contruccion informacion cuando lo instancias y vas a usar este componente, esto sirve cuando quieres tener componentes dinamicos.
+
+Es decir como este : la Alerta es la misma , pero si es un error se agregan esas clases de rojo. y si es un success agregamos las clases de verde.
+
+@if (session('success'))
+<p class="my-10 text-center border border-red-400 bg-red-100 text-red-700 py-3 text-sm">{{ session('error') }}</p>@endif
+
+Alert.php: colocamos en el contructor.
+  public function __construct(
+        public string $type = 'success', --> por default sera success.
+        public string $message = ''
+    ) {}
+
+alert.blade.php:
+{{-- le decimos que por default es success el type --}}
+@props(['type' => 'success' , 'message' => ''])
+
+{{-- se usa @php @endphp cuando se quiere usar codigo de php nativo que no es de laravel --}}
+@php
+    $colors = [
+        'success' => 'border-green-400 bg-green-100 text-green-700',
+        'error' => 'border-red-400 bg-red-100 text-red-700'
+    ];
+    // Filtramos por el type 
+    $class = $colors[$type] ?? $colors['success']
+
+@endphp
+
+{{-- en caso de que tengamos un mensaje --}}
+@if ($message) {{-- cortamos los colores del <p> y lo movemos al @php --}}
+        <p class="my-10 text-center border  py-3 text-sm {{ $class }}">
+        {{ $message}}</p>
+@endif
+
+login.blade.php se usa de esta forma:
+@if (session('error'))
+{{-- con ":" le decimos que tome el valor de la variable y no como un string  --}}
+    <x-alert type='error' :message="session('error')"/>
+@endif
+
+y para success seria asi : 
+@if (session('success'))
+        <x-alert :message="session('success')"/>
+@endif
+----------------------------------------------------
+Autenticar al Usuario hacia el Dashboard:
+
+public function store(SignInRequest $request){
+$data = $request->validated();
+if(!Auth::attempt($data)){
+return back()->with('error','Creadenciales incorrectas');
+}
+
+//Hasta aqui significa que ya se valido correctamente 
+return redirect()->route('dashboard');}
+
+nota importante: una authenticacion o una session dura 2 horas y se puede cambiar en : .env : 
+SESSION_LIFETIME=120 -> esta minutos
+
+Si aqui esta "true" significa que siempre estara autheticado, lo usan por ejemplo en login para que siempre este authenticado colocan un check :
+if(!Auth::attempt($data , true))
+
+por el momento estara en true.
+
+en config/session.php -> puedes cambiar el valor aqui
+lifetime => ...
+-------------------------------------------------------- 
+Prevenir el acceso al Dashboard si el usuario no verifico su cuenta:
+
+
+Se reenviara correo de verificacion porque seguro ya expiro el correo, para reenviar el verificado al correo. creando un boton.
+
+verify-email.blade.php
+
+<form method="POST" action="{{ route('verification.send') }}"><input 
+type="text"
+class="bg-amber-500 w-full text-center mt-5 px-5 py-2 uppercase font-bold cursor-pointer"
+value="Reenviar correo de verificacion">
+
+web.php
+Route::post('/email/verification-notification',function(Request $request){
+ dd($request->user());//vemos en atribute informacion de la autenticacion y como esta autenticado , el modelo User tiene el metodo sendEmailVerificationNotification() que envia el correo.
+
+$request->user()->sendEmailVerificationNotification(); 
+return back()->with('success','Se ha reenviado el correo de verificacion'); //para que vuelva a esta misma pagina
+})->middleware(['auth'])->name('verification.send');
+
+
+Y cuando le das click en el correo y ves el boton de verificar cuenta y en la tabla se llenara el campo email_verified_at y veras que esta verificado .
+
+Agregamos 'throttle:2,1' : 2 son las cantidades de peticiones que puedes enviar en un 1 minuto
+
+})->middleware(['auth','throttle:2,1'])->name('verification.send');
+------------------------------------------------
+Mostrar/Ocultar enlaces de Authenticacion y Registro si el usuario ya esta autenticado:
+
+vemos que cuando estamos en el dashboard aun estan los botones de iniciar session y registrarse.
+
+base.blade.php:
+laravel tambien tiene helpers para ver si el usuario esta autenticado. porque tenemos @auth:
+@auth //si el usuario esta autenticado entonces muestre esto
+//Muestra aqui  cuando esta autenticado
+<p class="text-white text-xl">Hola {{ auth()->user()->name }}</p>
+
+@else
+//queremos que se muestre cuando no este autenticado , son los botones de iniciar session y registrarse
+@endauth
+
+
+se usa @auth tambien para mostrar algo a solo los usuarios autenticados.
+-------------------------------------------------------------
 
 
 

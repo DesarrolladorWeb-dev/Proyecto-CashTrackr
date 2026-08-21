@@ -10,6 +10,7 @@ class SignupRequest extends FormRequest
 {
    //el usuario esta autorizado a ejecutar este request
     //por default esta false, para que lo pueda utilizar lo cambiamos a true
+    //si deseas puedes eliminar authorize() porque por defecto es true
   public function authorize(): bool
     {
         return true;
