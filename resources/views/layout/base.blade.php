@@ -10,6 +10,7 @@
             @vite(['resources/css/app.css', 'resources/js/app.js'])
     
         @endif
+        <script src="https://cdn.jsdelivr.net/npm/@tailwindplus/elements@1" type="module"></script>
     </head>
     <body>
             <header class="bg-purple-950 py-5">
@@ -24,6 +25,7 @@
 
                         @auth
                             <p class="text-white text-xl">Hola {{ auth()->user()->name }}</p>
+                            <x-dropdown-menu />
                         @else
                             
 

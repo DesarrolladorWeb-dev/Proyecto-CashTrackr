@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\LogoutController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -17,7 +18,7 @@ Route::post('/auth/register', [RegisterController::class,'store'])->name('regist
 Route::get('/auth/login', [LoginController::class,'index'])->name('login');
 Route::post('/auth/login', [LoginController::class,'store'])->name('login.store'); 
 
-
+Route::post('/auth/logout',[LogoutController::class,'store'])->name('logout.store');
 
 // ver el VerifyEmail.php vemos que le estamos pasando el id y el hash , el cliente da click en la url temporal y lo envia aqui 
 // /email/verify/id/hash           -> hash no es igual a encriptado  

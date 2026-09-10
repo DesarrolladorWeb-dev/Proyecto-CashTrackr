@@ -1098,11 +1098,28 @@ y entonces escribes los test puedes mejorar ese codigo.
 pero tambien debes considerar los edgecases
 edgecases : es un caso limite o caso extremo , que son ocaciones poco comunes o fuera de lo normal que pueden ocurrir en el sistema 
 ------------------------------------------------------
-TEMA:Dashboard de Administracion Primeros Pasos
+TEMA:Dashboard de Administracion Primeros Pasos:
+Creando Layour de Dashboard:
 
-
-
-
+creando el archivo : layout/app.blade para usarlo en el dashboard.blade
+-----------------------------------------
+Creando un Dropdown para usuarios autenticados
+para que el codigo no este demasiado y solo dejamos el blade
+λ php artisan make:component  DropdownMenu
+dropdown-menu.blade.php 
+base.blade.php -> se agrego script- linea 13 
+----------------------------------------------
+Cerrar la Sesion del Usuario desde el Dropdown;
+NOTA:siempre cerrar la session desde un formulario
+dropdown-menu.blade
+<form action="" method="POST">
+  @csrf  --> siempre colocarlos para formularios
+button "Cerrar Session"
+/>
+Creamos un controlador:
+λ php artisan make:controller LogoutController
+creamos en web la ruta 
+Route::post('/auth/logout',[LogoutController::class,'store'])->name('logout.store');
 
 
 

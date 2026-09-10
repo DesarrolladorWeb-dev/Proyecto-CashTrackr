@@ -12,6 +12,7 @@
 {{-- usa la directiva @section para usar el @yield del layout --}}
 @section('auth-contents')
 <form method="POST"  class="mt-14 space-y-5" action="{{ route('login.store') }}" novalidate>
+    @csrf
     <div class="flex flex-col gap-2">
         <label class="font-bold text-2xl" for="email">Email</label>
 
