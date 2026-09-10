@@ -19,7 +19,7 @@ class LoginController extends Controller
 
             if(!Auth::attempt($data)){
                 //en caso de que sean incorrectos 
-                return back()->with('error','Creadenciales incorrectas');
+                return back()->with('error','Credenciales incorrectas');
             }
 
             //Hasta aqui significa que ya se valido correctamente 
